@@ -1,0 +1,227 @@
+---
+title: "Multiple Testing Correction Demo"
+author: "Chris Lo"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+As alluded to in the statistics demo earlier this week, we want to be careful how we interpret p-values when performing multiple T-tests (ie. differential gene expression).
+
+## Motivation/Review
+
+In a hypothesis testing scenario, suppose that you want to compare the gene expression or MT and WT cell lines. Your null hypothesis is that there is no difference in gene expression between WT and MT cell lines. Suppose that in a gene that you are looking at, there is indeed no difference at the population level: the null hypothesis is true. But because we're looking at a *sample*, there is sampling variability and there is a chance that we will reject the null hypothesis. What is that probability? Answer: the same threshold we set the null distribution cutoff for rejection the null, which is usually set at $\alpha=.05$. So, 5% of the time by chance due to sampling you will reject the null hypothesis. In other words, the **False Positive Rate** is 5%.
+
+Let's say you test for 1,000 genes, and they all follow the null hypothesis: there's no genes that are differentially expressed. The number of false positives you will get is $1,000 * \alpha = 50$. Suppose you test for all the $~25,000$ genes in the human genome: you will get $25,000 * \alpha = 1,250$ false positives! In reality, we wouldn't expect all of the genes to follow the null hypothesis, but this is still alarming. 
+
+## Simulation
+
+Let's actually some data to explore this issue and see what we can do about it. Take 50 WT and 50 MT cell lines and make comparison for 1,000 genes. 
+
+### Scenario 1: All genes are not differentially expressed. 
+
+```{r echo=F, warning=F}
+library(tidyverse)
+theme_set(theme_bw())
+
+#generate data
+set.seed(1111)
+n_genes <- 1000
+n_cell_lines <- 50
+gene_exp <- data.frame(gene = character(),
+                 cell_line = character(),
+                 exp = numeric())
+
+for(i in 1:n_genes) {
+  WT_exp <- rnorm(n_cell_lines, mean = 5, sd = 1)
+  MT_exp <- rnorm(n_cell_lines, mean = 5, sd = 1)
+  df <- data.frame(gene = paste0("gene ", i), 
+                   cell_line = c(rep("WT", n_cell_lines), rep("MT", n_cell_lines)),
+                   exp = c(WT_exp, MT_exp))
+  gene_exp <- rbind(df, gene_exp)
+}
+  
+
+ggplot(gene_exp %>% filter(gene %in% paste0("gene ", 1:10)), aes(x = cell_line, y = exp)) + geom_boxplot() + facet_wrap(~gene)
+```
+
+We run T-tests for all 1,000 genes, and how many are significant? One way to visualize a lot of T-test's results is through the use of *Volcano Plots*, which display the effect size against the p-value. The p-value is shown on `-log10` scale. The cutoff for $\alpha=.05$ is shown as the horizontal line. 
+
+```{r echo=F}
+run_t_test <- function(group, values) {
+  df <- data.frame(group = group, values = values)
+  test <- t.test(values~group, data = df)
+  #returns:
+  tibble(p_value = test$p.value,
+         effect_size = test$estimate[2] - test$estimate[1])
+}
+
+gene_exp_test <- gene_exp %>% 
+  group_by(gene) %>% 
+  summarize(run_t_test(cell_line, exp))
+
+ggplot(gene_exp_test, aes(x = effect_size, y = -log10(p_value))) + geom_point() +
+  geom_hline(yintercept = -log10(.05))
+
+cat("Number of genes called statistically significant: ", length(which(gene_exp_test$p_value < .05)))
+
+```
+
+
+
+### Scenario 2: 20% of genes are diffrentially expressed with an effect size of .5 
+
+```{r echo=F, warning=F, error=F}
+#generate data
+set.seed(1111)
+n_genes <- 1000
+n_cell_lines <- 50
+pct_DE <- .2
+gene_exp <- data.frame(gene = character(),
+                 cell_line = character(),
+                 exp = numeric(),
+                 diff = logical())
+
+for(i in 1:(n_genes*(1 - pct_DE))) {
+  WT_exp <- rnorm(n_cell_lines, mean = 5, sd = 1)
+  MT_exp <- rnorm(n_cell_lines, mean = 5, sd = 1)
+  df <- data.frame(gene = paste0("gene ", i), 
+                   cell_line = c(rep("WT", n_cell_lines), rep("MT", n_cell_lines)),
+                   exp = c(WT_exp, MT_exp),
+                   null_hypothesis = TRUE)
+  gene_exp <- rbind(df, gene_exp)
+}
+  
+for(i in (n_genes*(1 - pct_DE) + 1):n_genes) {
+  WT_exp <- rnorm(n_cell_lines, mean = 5, sd = 1)
+  MT_exp <- rnorm(n_cell_lines, mean = 5.5, sd = 1)
+  df <- data.frame(gene = paste0("gene ", i), 
+                   cell_line = c(rep("WT", n_cell_lines), rep("MT", n_cell_lines)),
+                   exp = c(WT_exp, MT_exp), 
+                   null_hypothesis=FALSE)
+  gene_exp <- rbind(df, gene_exp)
+}
+
+
+ggplot(gene_exp %>% filter(gene %in% paste0("gene ", 900:910)), aes(x = cell_line, y = exp)) + geom_boxplot() + facet_wrap(~gene)
+  
+```
+
+
+```{r echo=F}
+run_t_test <- function(group, values) {
+  df <- data.frame(group = group, values = values)
+  test <- t.test(values~group, data = df)
+  #returns:
+  tibble(p_value = test$p.value,
+         effect_size = test$estimate[2] - test$estimate[1])
+}
+
+gene_exp_test <- gene_exp %>% 
+  group_by(gene, null_hypothesis) %>% 
+  summarize(run_t_test(cell_line, exp))
+
+ggplot(gene_exp_test, aes(x = effect_size, y = -log10(p_value), color = null_hypothesis)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(.05))
+
+
+```
+
+Here is what we get: you might need to stare at these number a little bit to make sense of it.
+
+```{r, echo=F}
+cat("False Positives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value < .05)), "\n") 
+cat("True Negatives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value >= .05)), "\n")
+cat("True Positives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value < .05)), "\n") 
+cat("False Negatives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value >= .05)), "\n")
+
+cat("False Positive Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value < .05)) /  (n_genes * (1 - pct_DE)), "\n") 
+cat("True Negative Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value >= .05)) / (n_genes * (1 - pct_DE)), "\n")
+cat("True Positive Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value < .05)) / (n_genes * pct_DE), "\n") 
+cat("False Negative Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value >= .05)) / (n_genes * pct_DE), "\n")
+```
+
+Our first concern is that we are calling too many genes significant when a lot of them should not be called as significant (False Positives). We see a second concern of genes that are differentially expressed but not called statistically significant (False Negatives). Let's try to control the False Positives and see how that affect False Negatives.
+
+### Method 1: Familywise Error Rate
+
+$\alpha=.05$ is the probability of getting a single False Positive for *one* test. So if we make $N$ tests, we are going to get $\alpha * N$ False Positives. 
+
+Instead, let's control for the probability of a single False Positive for all $N$ tests. This probability is called the **Familywise Error Rate**. You set what you would like the Familywise Error Rate to be, and then you figure out how to change the p-value cutoffs for individual tests accordingly:
+
+> If you want a Familywise Error Rate of $\alpha$, simply set the individual p-value cutoffs to $\alpha / N$
+
+##### Why does this work? Spend a minute working through the logic and convince yourself that this makes sense.
+
+If we want a Familywise Error Rate of $.05$, then our individual p-value cutoffs would be $.05 / 1,000 = 5e^{-05}$.
+
+Let's see what this looks like now:
+
+```{r echo=F}
+ggplot(gene_exp_test, aes(x = effect_size, y = -log10(p_value), color = null_hypothesis)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(.05/1000))
+
+cat("False Positives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value < .05/1000)), "\n") 
+cat("True Negatives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value >= .05/1000)), "\n")
+cat("True Positives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value < .05/1000)), "\n") 
+cat("False Negatives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value >= .05/1000)), "\n")
+
+cat("False Positive Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value < .05/1000)) /  (n_genes * (1 - pct_DE)), "\n") 
+cat("True Negative Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value >= .05/1000)) / (n_genes * (1 - pct_DE)), "\n")
+cat("True Positive Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value < .05/1000)) / (n_genes * pct_DE), "\n") 
+cat("False Negative Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value >= .05/1000)) / (n_genes * pct_DE), "\n")
+```
+
+We got rid of *all* of our False Positives, but we have become so conservative of making a single error that we lost almost all of our ability to detect True Positives. We have cell lines that have differentially expression (200 of them), and now we can only call a few of them as differentially expressed because we were so careful of having a single false positive. 
+
+We talk about False Positives, and now we're paying more attention to False Negatives. Here's a commonly used term in statistics: the **power** of a test is True Positives / (Total True). What is the power of the test here? Is it low or high?
+
+As biologists, why would we be concerned about this method?
+
+### Method 2: False Discovery Rate
+
+Instead of controlling for the probability of a single false positive for all $N$ tests, let's control for the probability of a single false positive out of the *positive tests*. This probability is called **False Discovery Rate**, and is less stringent than the Familywide Error Rate if both are set to the same probability.
+
+> To do so, a method called Benjamini & Hochberg correction is made to each of the original p-value, and a cutoff of the original $\alpha$ is used. The corrected p-value is also known as the q-value in literature. 
+
+Implemntation: Use `p.adjust()` function, and under the `method` argument, use `BH`.
+
+
+```{r echo=F}
+gene_exp_test$p_value_corrected <- p.adjust(gene_exp_test$p_value, method = "fdr")
+ggplot(gene_exp_test, aes(x = effect_size, y = -log10(p_value_corrected), color = null_hypothesis)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(.05))
+
+cat("False Positives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value_corrected < .05)), "\n") 
+cat("True Negatives: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value_corrected >= .05)), "\n")
+cat("True Positives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value_corrected < .05)), "\n") 
+cat("False Negatives: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value_corrected >= .05)), "\n")
+
+cat("False Positive Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value_corrected < .05)) /  (n_genes * (1 - pct_DE)), "\n") 
+cat("True Negative Rate: ", length(which(gene_exp_test$null_hypothesis == T & gene_exp_test$p_value_corrected >= .05)) / (n_genes * (1 - pct_DE)), "\n")
+cat("True Positive Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value_corrected < .05)) / (n_genes * pct_DE), "\n") 
+cat("False Negative Rate: ", length(which(gene_exp_test$null_hypothesis == F & gene_exp_test$p_value_corrected >= .05)) / (n_genes * pct_DE), "\n")
+
+
+```
+
+The False Discovery Rate states that out of the genes called statistically different, roughly 5% of them will be considered called as False Positives. 
+
+As biologists, what do you think of this cutoff?
+
+### Follow-up
+
+- When running differential expression tools such as DESeq2 testing across a large number of genes, False Discovery Rate is used to reduce the number of false positives whlie preserving power to detect true negatives.
+
+- In the KRAS paper, take a look at Table 1 analysis. What are they doing to the p-value there?
+
+- In the simulations shown above, what happens if we change the effect size or the sample size? How would the change the false positive rate or power?
