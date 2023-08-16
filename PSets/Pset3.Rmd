@@ -1,0 +1,237 @@
+---
+title: "BSRP Problem Set 3"
+author: "your-name-here"
+date: ""
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+# Introduction
+
+The goal of this problem set is to explore more in depth of the Stephens et al. paper on KRAS mutation and expression. You will bring in tools of ggplot and statistical testing to quantify the results more carefully. Then, you will use functional genomics to validate your findings.  
+
+Here is our original question. 
+
+## Biological Problem <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| Is KRAS expression higher in KRAS mutated cell lines compared to KRAS wild-type cell lines? Does this trend hold in lung, pancreas, and colon cancer cell lines? | T-test to compare means of two groups, visualized with box plots. |
+
+
+## Assignment Formatting
+
+Write your code in the designated code chunks provided, and write your written answers in the text region of the document. If you want to incorporate both text and code output, consider the function `cat()`. For example, `cat("The number of rows in the iris dataframe is", nrow(iris))`.
+
+
+```{r, echo=F, message=F}
+#Load libraries
+library(tidyverse)
+library(taigr)
+```
+
+```{r, echo=F, message=F}
+#Load in datasets
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+dependency <- load.from.taiga(data.name='public-21q1-4b39',
+                              data.version=33,
+                              data.file='CRISPR_gene_effect',
+                              quiet = T)
+colnames(dependency) = stringr::word(colnames(dependency), 1) 
+dependency = as.data.frame(dependency)
+dependency$DepMap_ID = rownames(dependency)
+```
+
+
+# Back to Figure 1
+
+## Problem 1
+
+Wrangle the the data back into the target dataframe of cell lines as observations, and KRAS mutation, KRAS expression, and disease type as variables. Feel free to use your code from last problem set. What is the dimension of this dataframe? This is your target dataframe for the analysis - make sure that it makes sense to you before you run your analysis!
+
+```{r, echo=F, message=F}
+#your code here
+KRAS_mutations = mutation %>% filter(Hugo_Symbol == "KRAS" & Variant_Classification == "Missense_Mutation")
+KRAS_mutations_CL = KRAS_mutations %>% group_by(DepMap_ID) %>% summarize(N_KRAS_mutations = n())
+KRAS_expression = expression %>% select(DepMap_ID, KRAS) %>% rename(KRAS_expression = KRAS)
+analysis = metadata %>% left_join(KRAS_mutations_CL, by = "DepMap_ID") %>% 
+  left_join(KRAS_expression, by = "DepMap_ID")
+analysis = analysis %>% mutate(KRAS_mutated = !is.na(N_KRAS_mutations))
+cat("The dimension of the target dataset is", dim(analysis))
+
+```
+
+## Probelm 2
+
+Using ggplot, create the Figure 1 figure for lung cancer. Then, run a T-test and interpret the results in your own words: what is the null hypothesis, and what is the population parameter? What is your inference about the population parameter and confidence interval? How do you interpret the p-value? Also, compute the sample size used for each MT and WT groups - we will be looking at this more closely soon.
+
+*Note: When running the T-test, it has the signs flipped - a negative effect size indicates higher expression in the mutant group.*
+
+Repeat this for pancreatic cancer and colorectal cancers.
+
+```{r echo = F, message = F}
+#your code here
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+ggplot(LUAD_analysis) + geom_boxplot(mapping = aes(x = KRAS_mutated, y = KRAS_expression)) + ggtitle("Lung Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = LUAD_analysis)
+cat("Sample size of MT", table(LUAD_analysis$KRAS_mutated)[2])
+cat("Sample size of WT", table(LUAD_analysis$KRAS_mutated)[1])
+```
+Solution for lung cancer: The null hypothesis is that there is no difference in means between the two groups. We inferred that the difference between the two groups is  4.06 - 4.53 = -.47 favoring higher expression in mutant with a 95% confidence interval of (-.77, -.16). The p-value is < .05, so we reject the null hypothesis, favoring that there is a difference in mean gene expression. 
+
+```{r echo = F, message = F}
+PANC_analysis = analysis %>% filter(primary_disease == "Pancreatic Cancer")
+ggplot(PANC_analysis) + geom_boxplot(mapping = aes(x = KRAS_mutated, y = KRAS_expression)) + ggtitle("Pancreatic Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = PANC_analysis)
+cat("Pancreatic cell lines: Sample size of MT", table(PANC_analysis$KRAS_mutated)[2])
+cat("Pancreatic cell lines: Sample size of WT", table(PANC_analysis$KRAS_mutated)[1])
+```
+Solution for pancreatic cancer: The null hypothesis is that there is no difference in means between the two groups. We inferred that the difference between the two groups is 4.06 - 4.21  = -.15 favoring higher expression in mutant with a 95% confidence interval of (-1.13, .82). The confidence interval overlaps the null hypothesis of difference of 0. The p-value is > .05, so cannot reject the null hypothesis, suggesting that the difference in gene expression is minimal to none. 
+
+```{r echo = F, message = F}
+
+COL_analysis = analysis %>% filter(primary_disease == "Colon/Colorectal Cancer")
+ggplot(COL_analysis, aes(KRAS_mutated, KRAS_expression)) + geom_boxplot() + ggtitle("Colon/Colorectal Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = COL_analysis)
+cat("Colon cell lines: Sample size of MT", table(COL_analysis$KRAS_mutated)[2])
+cat("Colon cell lines: Sample size of WT", table(COL_analysis$KRAS_mutated)[1])
+```
+Solution for colon cancer: The null hypothesis is that there is no difference in means between the two groups. We inferred that the difference between the two groups is 4.17 - 4.28 = -.11 favoring higher expression in mutant with a 95% confidence interval of (-.44, .22). The confidence interval overlaps the null hypothesis of difference of 0. The p-value is > .05, so cannot reject the null hypothesis, suggesting that the difference in gene expression is minimal to none. 
+
+## Problem 3
+
+Run the same analysis of KRAS expression compared with mutation looking at *all* cell lines. Compare this analysis to one of your analysis in Problem 2: the anlaysis you performed in Problem 2 is on a subset of data of your analysis here. Do you always expect the trends of your analysis be same between the entire group and the subgroup? Hint: For a similar analysis, consider the section "KRAS expression and CNV" of the paper.
+
+```{r echo = F, message = F}
+ggplot(analysis, aes(x = KRAS_mutated, y = KRAS_expression)) + geom_boxplot() + ggtitle("All Cancer Types")
+t.test(KRAS_expression ~ KRAS_mutated, data = analysis)
+cat("Sample size of MT", table(analysis$KRAS_mutated)[2])
+cat("Sample size of WT", table(analysis$KRAS_mutated)[1])
+```
+
+It still trends in the positive direction that mutant KRAS is associated with higher KRAS expression. However, subgroups of this does not necessarily have to be true - some subtypes of cancer can have lower KRAS expression when KRAS is mutated, despite the global trend shown here.
+
+
+# Functional Genomics
+
+
+Think back to our original hypothesis: mutant, oncogenetic KRAS leads to uncontrollable cell growth. We have shown that mutant KRAS cell lines exhibit more KRAS expression, hence more KRAS protein activity, associated with cancer growth. This is an association. How can we be more sure that the cancer cell *needs* mutant KRAS to proliferate? What happens if we take a cancer celline with KRAS mutation, and inactivate the gene? If most of the cell line dies from such an intervention, then we know it may have a large impact on the survival of the cell line. The mutation is *necessary* for the cancer's survival. Furthermore, if corresponding cell lines without KRAS mutation survives from such an intervention, then we have identified a genotype essential for cancer cells but not non-KRAS mutation cells. 
+
+The *Dependency Map* CCLE cell lines, deleted a gene using CRISPR, and measured how well the cell line survived that intervention. This process was repeated for almost every human gene. The resulting dataset, the Dependency Map, can be explored!
+
+A few terms to be defined:
+
+A cell line is *dependent* on gene X if *knocking out* gene X by CRISPR causes the cell line to reduce its ability to grow.
+
+The ability of a cell line to grow is called its *viability*. When a cell line's viability decreases, it is going through *depletion*. When a cell line's viability increases, it is going through *proliferation*.
+
+One needs some controls when analyzing a CRISPR experiment. An *essential gene* is a gene that is necessarily for all cells to survive. A *nonessential gene* is a gene that is not necessarily for all cells to survive. 
+
+
+## Biological Problem <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| Is KRAS mutation associated with strong KRAS dependency?                                                                           | T-test to compare means of two groups, visualized with box plots. |
+
+# Exploring Dependency Map Data
+
+The dependency score is calculated in the following: 
+
+- 0 indicates no effect: the number of cells after the CRISPR knock-out is similar to the effect of knocking out nonessential genes. The median dependency score of a list of nonessential genes is 0. 
+- Negative score indicates depletion: the number of cells after CRISPR knock-out has decreased. The median dependency score of a list of essential genes is -1. Most cells will have died if the score is -1.
+- Positive score indicates proliferation: the number of cells after CRISPR knock-out has increased.  
+
+## Problem 4
+
+Run a few commands to get to know the `dependency` data. It is structured the most similar to the expression data. How many genes and cell lines are profiled? Then, using ggplot, create a histogram of KRAS dependency, and give some summary statistics about the dependency score. What can you conclude about KRAS dependency in this collection of cell lines?
+
+```{r, echo=F, message=F}
+#your code here
+cat("Dependency has", nrow(dependency), "cell lines.")
+cat("Dependency has", ncol(dependency), "genes.")
+
+ggplot(dependency) + geom_histogram(mapping = aes(KRAS)) + labs(x = "KRAS dependency")
+
+cat("The mean dependency score is:", mean(dependency$KRAS))
+cat("The median dependency score is:", median(dependency$KRAS))
+
+
+```
+Solution: For most cell lines, knocking out KRAS has a killing effect on the cell lines. 
+
+## Problem 5
+
+Wrangle a new target dataframe with the following observations and variables: 
+
+Observations: cell lines. 
+  
+Variables: KRAS mutated, KRAS expression, KRAS dependency, and the Primary Disease. 
+
+Hint: working on top of what you have in Problems 1-2 will make things easier. 
+Warning: The columns for KRAS in expression and dependency are both named `KRAS`, so this is going to be confusing if you don't rename at least one of your columns to something else. Use the `rename()` function to fix this issue. For example, `dataframe = rename(dataframe, KRAS_expression = KRAS)`
+
+Run some checks to make sure that you got the right target dataframe! What is the dimension of this target dataframe?
+
+```{r, echo=F, message=F}
+
+KRAS_dependency = dependency %>% select(DepMap_ID, KRAS) %>% rename(KRAS_dependency = KRAS)
+analysis = analysis %>% left_join(KRAS_dependency)
+
+cat("Dimention of dataframe:", dim(analysis))
+```
+
+
+## Problem 6
+
+Perform a 2-sample T-test of dependency score between KRAS mutated and wildtype for lung cancer cell lines. Analyze it similar how you did in Problem 2. 
+Interpret what the mean dependency score means roughly for each wildtype and mutant group.
+
+```{r, echo=F, message=F}
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+ggplot(LUAD_analysis) + geom_boxplot(aes(x = KRAS_mutated, y = KRAS_dependency))
+t.test(KRAS_dependency ~ KRAS_mutated, data = LUAD_analysis)
+cat("Lung cell lines: Sample size of MT", table(LUAD_analysis$KRAS_mutated)[2])
+cat("Lung cell lines: Sample size of WT", table(LUAD_analysis$KRAS_mutated)[1])
+
+```
+
+Solution for lung cancer: The null hypothesis is that there is no difference in means of dependency score between the two groups. We inferred that the difference between the two groups is  -0.48 - -1.167 = .69 favoring lower dependency in mutant with a 95% confidence interval of (.56, .82). The p-value is < .05, so we reject the null hypothesis, favoring that there is a difference in mean dependency score. 
+
+KRAS mutated cell lines has a mean dependency score of ~-1, indicating that KRAS-mut is similar to essential genes, while KRAS-wt is somewhere between essential and nonessential genes. 
+
+## Problem 7
+
+Based on what you found in Problem 5, how would you conclude your findings? What are the implications, and what analysis or experiments would you follow up with?
+
+Solution: KRAS mutation is an essential genotype for cancer dependency in lung cancer cell lines, when compared to KRAS wildtype.
+
+In the context of precision medicine, this leads to the hypothesis that if a patient has lung cancer and KRAS mutation, then their cancer cells are highly dependent on KRAS for growth. Having a drug that targets KRAS protein  would lead to cancer specific cell death. 
+
+There are many things that we don't know about this cancer dependency: We are comparing against other KRAS-WT lung cancer cell lines, and a significant amount of their cells will die off also. We need to do a lot more comparisons to characterize the toxicity of such an intervention as knocking out KRAS: comparison to healthy cells, a range of model systems, etc. We want to be careful whether this is a cancer-specific dependency vs. tissue-specific dependency. We might also study the downstream pathway carefully to understand what knocking out KRAS is doing exactly: MAPK, PIK3CA, etc. (There is work being done now at the Dependency map to profile omics after knocking out the cell to investigate these hypothesis.)
+
+Turns out, there have been large efforts to find ways to target KRAS but no successful drugs have been found, but that may be changing as of last year. There has been one promising drug targeting one specific, less common mutation of KRAS. What else can be done? A lot of work has been done to search for other dependencies in the context when KRAS is mutated. PIK3CA is dependent in certain context of KRAS mutants. 
+
+  

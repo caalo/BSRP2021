@@ -1,0 +1,67 @@
+---
+title: "BSRP Problem Set 1"
+author: "your-name-here"
+date: ""
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+# Introduction
+
+The main goal of this problem set is to briefly look at the metadata from the Cancer Cell Line Encyclopedia (CCLE). Please read the press release of CCLE before starting this problem set!
+
+# Loading the metadata in 
+
+Place the metadata file in the same directory as this document. Load it in with the following code chunk below. Notice that we access this file from a relative path, not an absolute path (don't worry if you don't know what that means).
+
+```{r echo=F, message=F}
+metadata = read.delim("sample_info.csv", sep = ",", stringsAsFactors = F)
+```
+
+## Problem 1
+
+How many cell lines are in this dataset?
+
+```{r echo=F, message=F}
+dim(metadata)
+```
+There are 1804 cell lines.
+
+Look at the column `primary_disease`, and create a frequency table using `table` function. What is the most common cancer type profiled, and what is the least common cancer type profiled?
+
+```{r echo=F, message=F}
+table(metadata$primary_disease)
+```
+
+Lung cancer. 
+Adrenal cancer and teratoma. 
+
+## Problem 2
+
+What is the mean age of the patient whose original sample was used for establish the cell line? Add the argument `na.rm = T` to the `mean()` function so that it removes any missing values `NA` before making the calculation.
+
+```{r echo=F, message=F}
+mean(metadata$age, na.rm = T)
+```
+Compute the median age also. What do you notice between the mean and median age? What does the difference say about the variability of age?
+
+```{r echo=F, message=F}
+median(metadata$age, na.rm = T)
+```
+
+Solution: The median is a bit larger than the mean. This suggests that there are outliers towards the younger population, shifting the mean to be smaller than the median.
+
+
+Use the `hist()` function to create a histogram of age. You can toggle with the bin size by adding a second argument on the numbers of bins used, such as `hist(x, 50)`. Does this visualization help explain your previous answer?
+
+```{r echo=F, message=F}
+hist(metadata$age, 50)
+```
+
+
+

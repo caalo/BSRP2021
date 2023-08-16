@@ -1,0 +1,264 @@
+---
+title: "BSRP Problem Set 2"
+author: "your-name-here"
+date: ""
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+# Introduction
+
+The main goal of this problem set is to implement the Figure 1 analysis from Stephens et al. paper on KRAS mutation and gene expression using CCLE data. The author used The Cancer Genome Atlas (TCGA) data in their analysis, which is a genomics dataset similar to CCLE but profiled using patient's tumor biopsies. Cell lines are the workhorses of cancer research, and it would be interesting to see whether the genomics of cell line data for KRAS is similar to that of TCGA's. You will be working with CCLE's metadata, mutation, and gene expression data.
+
+## Biological Question <-> Computational Analysis
+
+Figure 1 answers the following biological question:
+
+> *Is KRAS expression higher in KRAS mutated cell lines compared to KRAS wild-type cell lines? Does this trend hold in lung, pancreas, and colon cancer cell lines?*
+
+It was answered with the following computational analysis:
+
+> *T-test to compare means of two groups, visualized with box plots.*
+
+We will go over the details behind a T-test next week. For now, think of the analysis as comparing the KRAS mean expression for KRAS mutant cell lines against KRAS mean expression for KRAS wild-type cell lines. Instead, we will focus mainly on wrangling multiple datasets so that they are are ready for the computational analysis.
+
+## Data Wrangling
+
+Here is the proposed strategy for data wrangling:
+
+> *Our target dataframe is going to have cell lines as observations, and KRAS mutation, KRAS expression, and disease type as variables.*
+
+The **target dataframe** is the dataframe where you can run the computational analysis easily. We will show you exactly how the run the computational analysis once the target dataframe is in the right format.
+
+
+## Exploratory Data Analysis
+
+In the process of data wrangling, you will look at each part of the data carefully to learn what the data is like. After looking at the data, does the data help answer your question, or are adjustments needed? What other hypothesis might come up as you explore the data? This process in data science/statistics is called Exploratory Data Analysis. 
+
+A wetlab analogy is to check that you have the samples, reagents, and materials before you run your experiments. As you make these checks and get materials in order, you might find unexpected things: missing items, new kits, etc. that might make you change experiments. We do the same thing in computational work: we think we have the right data to answer our question but we might find something else along the way that make us change plans. 
+
+
+## Assignment Formatting
+
+Write your code in the designated code chunks provided, and write your written answers in the text region of the document. If you want to incorporate both text and code output, use the function `cat()` . For example, `cat("The number of rows in the iris dataframe is", nrow(iris))`.
+
+# Warming up to the problem
+
+## Problem 0.
+
+*In your own words, explain the scientific significance of the Biological Question (see introduction)*
+
+Solution: The RAS family proteins are a important molecular switch that regulate cell growth and differentiation. When mutated at a hotspot, the switch becomes unregulated, leading to abnormal proliferation and growth. A better understanding of how KRAS mutation affects its expression gives better understanding of how an mutant, oncogenetic KRAS has impact on its molecular pathway. Namely, we don't know if mutation is associated with increased expression.
+
+*In your own words, explain why the target dataframe format is useful for the computational analysis.*
+
+Solution: We can quickly subset to the disease type of interest, and then use the variables KRAS mutation and KRAS expression to compare differences in gene expression. The observations are in cell lines, which is the what is needed in the analysis.
+
+# Loading in the data 
+
+## Problem 1. 
+
+We first load in the needed library and data, and this is done in the code chunk below.
+
+```{r, echo=F, message=F}
+library(tidyverse)
+library(taigr)
+```
+
+```{r, echo=F, message=F}
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+```
+
+First, let's take a look at the number of cell line observations we have for each dataset. This is important to get a sense on how many cell lines can be involved in the analysis. If we make any `join()` on the data, we need to be mindful how we join. 
+
+*How many mutations are profiled in the mutation data?*
+
+*How many celllines are profiled in the expression data?*
+
+*How many genes are profiled in the expression data?*
+
+*How many celllines have metadata description?*
+
+```{r, echo=F}
+#your code here
+cat("Mutation has", nrow(mutation), "mutations.")
+cat("expression has", nrow(expression), "cell lines.")
+cat("expression has", ncol(expression), "genes.")
+cat("Metdata has", nrow(metadata), "cell lines.")
+```
+
+*Why is it difficult to figure out the number of celllines in the mutation data using the vocabulary observations, variable, and values?*
+
+*Using the `table()` function on the column "DepMap_ID", figure out the number of cell lines profiled for mutation. Do the same for the number of genes using column "Hugo_Symbol".*
+
+Solution: Mutation is difficult because the observations are for individual mutations. Each mutation relates to a gene of a cellline. The corresponding cellline is in one of variables, "DepMap_ID". 
+
+```{r, echo=F}
+#your code here
+cat("Mutation has", length(table(mutation$DepMap_ID)), "cell lines.")
+cat("Mutation has", length(table(mutation$Hugo_Symbol)), "genes.")
+```
+
+
+# Looking at KRAS mutations
+
+Let's look at the mutation data to make sure that we are using the appropriate mutations for the analysis.
+
+## Problem 2
+
+One important column in the mutation dataset is "Variant_Classification". It classifies mutations on the way it affect amino acid. Take a look at what kind of mutations are profiled: *what kind of mutations would have a functional impact on KRAS protein?*
+
+Solution: Frame shifts, Missense, Nonsense, Nonstop, Start/stop codons, Splice Sites. 
+
+*Subset the data to contain only missense AND KRAS mutations, as we know that the most well-known gain-of-function mutations for KRAS are missense mutations. Store this in a new dataframe variable.* 
+
+```{r, echo=F}
+#your code here
+KRAS_mutation = mutation %>% filter(Hugo_Symbol == "KRAS" & Variant_Classification == "Missense_Mutation")
+```
+
+Take a look at the "Protein_Change" column. *Does the most common codon change reflect the most common codon changes described in the Introduction of Stephens et al. paper? Given your answer, why is it a reasonable answer?*
+
+```{r, echo=F}
+#your code here
+table(KRAS_mutation$Protein_Change)
+```
+Solution: Yes, the top mutations correspond to codons 12, 13, and 61. Cell lines should reflect genetically to the primary tumor sample, so we would hopefully expect the top mutations described in TCGA match with that of CCLE's. 
+
+## Problem 3
+
+*Transform the mutation dataframe so that the observations are cell lines, and the variable (call it `N_KRAS_mutation`) is the number of KRAS mutation observed per cell line. There can be more than one mutation per cell line.*
+
+```{r, echo=F, message=F}
+#your code here
+KRAS_mutation_CL = KRAS_mutation %>% group_by(DepMap_ID) %>% summarize(N_KRAS_mutation = n())
+```
+
+*Examine the number of cell lines in the dataframe you just transformed. What happened? Is this expected? How might this affect downstream analysis?*
+
+Solution: When we subsetted the dataset to KRAS missense mutations, we also subset the number of cell lines. We are left with 240 cell lines. The variable we created is the number of KRAS mutations, not whether a cell line has a KRAS mutation. When we join this the metadata, we want to make sure we use join_all. 
+
+
+# Looking at KRAS expression
+
+## Problem 4
+
+*Locate KRAS gene expression in the expression dataframe, and summarize the minimum, maximum, mean, and medium of KRAS expression.*
+
+```{r, echo=F}
+#your code here
+cat("Min:", min(expression$KRAS))
+cat("Max:", max(expression$KRAS))
+cat("Mean:", mean(expression$KRAS))
+cat("Median:", median(expression$KRAS))
+```
+
+The unit of gene expression is $log_2$ transformed. That means each increased unit means double amount of mRNA transcript observed, and you can see it on the y-axis of Figure 1 in the paper. In most RNA analysis, the data is $log_2$ transformed, for statistical properties.
+
+To get a sense of the original scale, *transform the expression back to its raw mRNA counts, and recalculate the min, max, mean, and median.* This is the mRNA count, normalized to gene length and sequencing depth. 
+
+```{r, echo=F}
+#your code here
+cat("Min:", min(2^expression$KRAS))
+cat("Max:", max(2^expression$KRAS))
+cat("Mean:", mean(2^expression$KRAS))
+cat("Median:", median(2^expression$KRAS))
+```
+
+# Integrating metadata, mutation, and expression data together
+
+## Problem 5
+
+Using the `*_join()` functions carefully, create a dataframe with the following:
+
+*    Observations: cell lines (all of them from metadata)
+
+*    Variables: all variables from metadata dataframe, KRAS expression, and number of KRAS missense mutations. 
+
+Hint 1: Work with the dataframe you created in Problem 3. 
+
+Hint 2: It may be helpful to subset the expression data to something smaller before you use `*_join()`
+
+```{r, echo=F, message=F}
+#your code here
+KRAS_expression = expression %>% select(DepMap_ID, KRAS)
+analysis = metadata %>% left_join(KRAS_mutation_CL, by = "DepMap_ID") %>% 
+  left_join(KRAS_expression, by = "DepMap_ID")
+```
+
+*Then, create a new variable "KRAS_mutated" that has the value True if the number of KRAS missense is not `NA` and False if it is `NA`.*
+
+Hint: Use `is.na()` function on `N_KRAS_mutation` column. 
+
+```{r, echo=F, message=F}
+#your code here
+analysis = analysis %>% mutate(KRAS_mutated = !is.na(N_KRAS_mutation))
+```
+
+*Perform some checks yourself to make sure that what you did makes sense. Are there missing NA values that should be flagged?*
+
+```{r, echo=F, message=F}
+#your code here
+table(is.na(analysis$KRAS))
+```
+
+Solution: There are 500 NAs in the KRAS dataset. This will limit our analysis sample size. 
+
+# Recreating Figure 1
+
+## Problem 6
+
+*Make a boxplot of KRAS expression by whether the cell line has KRAS mutation or not.*
+
+The boxplot is created using ggplot, a plotting function we will go in depth next week. For now, use the commented starter code to put in your dataframe from Problem 5 and the data variables associated with the dataframe to make the plot.
+
+```{r, echo=F, message=F}
+#ggplot(your_df_here) + geom_boxplot(mapping = aes(KRAS_mutated_variable_here, KRAS_expression_variable_here)) + ggtitle("your_plot_title_here")
+
+ggplot(analysis) + geom_boxplot(mapping = aes(KRAS_mutated, KRAS)) + ggtitle("All cell lines")
+```
+
+*Then, subset to lung, pancreas, and colon cancers and make three more boxplots. How do you interpret the boxplot? How do they compare to all cancer cell lines and Figure 1 of Stephens et al. paper? What could be some reasons behind the difference in the comparison?*
+
+```{r, echo=F, message=F}
+ggplot(analysis %>% filter(primary_disease == "Lung Cancer")) + geom_boxplot(mapping = aes(KRAS_mutated, KRAS)) + ggtitle("Lung Cancer")
+
+ggplot(analysis %>% filter(primary_disease == "Pancreatic Cancer")) + geom_boxplot(mapping = aes(KRAS_mutated, KRAS)) + ggtitle("Pancreatic Cancer")
+
+ggplot(analysis %>% filter(primary_disease == "Colon/Colorectal Cancer")) + geom_boxplot(mapping = aes(KRAS_mutated, KRAS)) + ggtitle("Colon Cancer")
+```
+
+Solution: The boxplot shows the range, mean, Q1, and Q3 of gene expression data. All of the cell lines, and specific subsets have a similar trend as the paper - that mutation is associated with higher gene expression There seems to be barely a difference in the colon cancer in CCLE compared to a significant difference in TCGA. 
+
+The range and difference between WT/Mutant is different in the two analysis. CCLE analysis has log2 ratios of 4-6, while the paper's TCGA analysis has a range of 10-12. 
+
+All of these differences could be due to different computational pipelines, difference between patient and cell line, and sample size differences. 
+
+## Problem 7
+
+We know that association is far from causation. *Using ideas from the paper and/or your ideas, what are some other factors that might explain gene expression changes between KRAS wildtype and mutant?*
+          
+Solution: Copy number changes has a strong relationship with gene expression. Epigenetic or gene regulatory relationships, such as enhancers, silencers, methylation, histone modifications, may also play a role. It is also possible that the majority of the KRAS transcript are wildtype encoding, not mutant!
+

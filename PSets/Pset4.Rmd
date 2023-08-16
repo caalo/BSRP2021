@@ -1,0 +1,303 @@
+---
+title: "BSRP Problem Set 4"
+author: "your-name-here"
+date: ""
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+# Introduction
+
+The goal of this problem set is to use correlation analysis on gene expression to examine the KRAS pathway. Then, you will revisit and expand on the KRAS T-test to test for many genes using differential gene expression. 
+
+Before you try knitting this document, please install the following packages via your R console (the code is commented out). This installs the needed tools for differential gene expression. You only need to do this once.
+
+```{r echo=F, message=F}
+# install.packages("BiocManager")
+# BiocManager::install(version = "3.12")
+# BiocManager::install("limma")
+# BiocManager::install("edgeR")
+```
+
+
+Here is our new biological question
+
+## Biological Question <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| How is the expression of KRAS correlated with genes related in its pathway in lung, pancreas, and colon cancer cell lines? | Multiple correlation to measure linear relationship. |
+
+
+## Assignment Formatting
+
+Write your code in the designated code chunks provided, and write your written answers in the text region of the document. If you want to incorporate both text and code output, the function `cat()` will do the trick in code chunks. For example, `cat("The number of rows in the iris dataframe is", nrow(iris))`.
+
+
+```{r, echo=F, message=F}
+#Load libraries
+library(tidyverse)
+library(taigr)
+library(edgeR)
+```
+
+```{r, echo=F, message=F}
+#Load in datasets
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+dependency <- load.from.taiga(data.name='public-21q1-4b39',
+                              data.version=33,
+                              data.file='CRISPR_gene_effect',
+                              quiet = T)
+colnames(dependency) = stringr::word(colnames(dependency), 1) 
+dependency = as.data.frame(dependency)
+dependency$DepMap_ID = rownames(dependency)
+```
+
+
+
+# Correlation Analysis
+
+Three well-established genes that are activated by KRAS are PI3K, RAF, and RAL. We will use correlation analysis to see how the expression of KRAS, PI3K, RAF, and RAL are related linearly.
+
+To look at the correlation between genes across cell lines, we need the following dataframe:
+
+- Observations: Cell lines.
+
+- Variables: Gene expression of KRAS, PI3K, RAF, and RAL. They are labeled as `KRAS`, `PIK3CA`, `RAF1`, and `RALA` respectively in the column names of `expression` dataframe. Also, we need `primary_disease` specifying what cancer subtype the cell line is.
+
+
+## Probelm 1
+
+Wrangle a dataframe into the desired dataframe as described above. 
+
+
+
+```{r, echo=F, message=F}
+#your code here
+expression_subset = expression %>% select(DepMap_ID, KRAS, PIK3CA, RAF1, RALA) 
+analysis = metadata %>% left_join(expression_subset, by = "DepMap_ID")
+```
+
+## Probelm 2
+
+Using the `cor()` function, compute the correlation between KRAS and PIK3CA, and make a scatterplot of the relationship. If you have `NA` in the dataframe and they should be ignored when computing the correlation, use the argument `use = "complete.obs"` in the `cor()` function. How does it look?
+
+```{r echo = F, message = F}
+#your code here
+cor(analysis$KRAS, analysis$PIK3CA, use = "complete.obs")
+ggplot(analysis) + geom_point(aes(x = KRAS, y = PIK3CA))
+```
+
+Solution: The linear trend is definitely there, but there are some outliers that may come from not a linear trend. Correlation as a metric isn't useful to deal with data not from a linear trend.
+
+## Problem 3
+
+To show that correlation as a metric does not depend on the scale, convert the scale of KRAS from log2 fold change to fold change in a new variable in the dataframe. Then, compute the correlation between KRAS fold change and PIK3CA log2 fold change, and make a scatterplot. What do you see?
+
+```{r echo = F, message = F}
+#your code here
+analysis$KRAS_scaled = analysis$KRAS^2
+cor(analysis$KRAS_scaled, analysis$PIK3CA, use = "complete.obs")
+ggplot(analysis) + geom_point(aes(x = KRAS_scaled, y = PIK3CA))
+```
+
+Solution: The correlation stays the same, but the scatterplot axis changed.
+
+## Problem 4
+
+To examine all pair-wise correlations between these four genes systematically, one can summarize it in a correlation matrix. Each row and column correspond to each of the four genes, and the cell correspond to the correlation value.
+
+To generate such a matrix, the `cor(dataframe)` function can take in a dataframes with numeric variables. Correlation is computed between all pairwise combinations of the variables in the dataframe. 
+
+Wrangle the dataset: you will need to get rid of unnecessary variables. 
+
+Then, compute the correlation matrix. What do you see? How would you interpret it? What gene pair relationship is the strongest (that is not correlation with itself)? Feel feel to create a scatterplot of a relationship you find interesting.
+
+```{r echo = F, message = F}
+analysis2 = analysis %>% select(KRAS, PIK3CA, RAF1, RALA) 
+cor(analysis2, use = "complete.obs")
+ggplot(analysis2) + geom_point(aes(x = RAF1, y = PIK3CA))
+
+```
+
+Solution: RAF1 and PIK3CA has the strongest correlation. KRAS may be upregulating these two genes in similar ways, or other pathways are activating these two genes in very similar ways.
+
+## Problem 5
+
+Subset the data down to lung, pancreas, or colon cell lines, and redo the correlation matrix analysis. How does an analysis specific to a cancer subtype compare the all cell lines?
+
+```{r echo = F, message = F}
+analysis2 = analysis %>% filter(primary_disease == "Lung Cancer") %>% select(KRAS, PIK3CA, RAF1, RALA) 
+cor(analysis2, use = "complete.obs")
+ggplot(analysis2) + geom_point(aes(x = RAF1, y = PIK3CA))
+```
+
+Solution: Similar trend for lung cancer cell lines, but definitely less strong of a linear association.
+
+
+# Differential Gene Expression
+
+Now, we are going to compare KRAS WT/MT cell lines against gene expression of all genes profiled from RNA sequencing via differential gene expression. 
+
+## Biological Problem <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| Which genes are the most upregulated or downregulated from KRAS mutation compared to WT in lung cancer cell lines? | Differential gene expression analysis, visualized with volcano plots. |
+
+# Data Wrangling
+
+We first need to get a dataframe ready to perform differential gene expression. This dataframe gives information which cell lines will be labeled as mutant vs. wildtype when comparing KRAS expression levels. We will look at the gene expression data shortly.
+
+## Problem 6
+
+We need the following:
+
+- Observation: Lung cancer cell lines. 
+- Variables: DepMap_ID, KRAS_mutated (logical vector whether KRAS is mutated).
+
+You should be able to use code from Week 3 to create this dataframe fairly easily.
+
+```{r, echo=F, message=F}
+#your code here
+KRAS_mutations = mutation %>% filter(Hugo_Symbol == "KRAS" & Variant_Classification == "Missense_Mutation")
+KRAS_mutations_CL = KRAS_mutations %>% group_by(DepMap_ID) %>% summarize(N_KRAS_mutations = n())
+analysis = metadata %>% left_join(KRAS_mutations_CL, by = "DepMap_ID") 
+analysis = analysis %>% mutate(KRAS_mutated = !is.na(N_KRAS_mutations))
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+```
+
+
+# Setup code for differential gene expression
+
+The following code first loads in the raw RNA sequencing data, which is the raw data that is used to generate the gene expression data. Differential gene expression analysis takes this raw RNA sequencing data, processes it differently, and runs the desires analysis across all genes.
+
+The code then defines a function to perform differential gene expression analysis in a function, `runDifferentialGeneExp`.
+
+The first argument, `DepMap_ID`, is a String vector of the cell line names to perform differential gene expression. 
+
+The second argument, `cellLineStatus`, is a Logical vector indicating whether the corresponding cell lines in DepMap_ID is in the mutated group, with TRUE being mutated, and FALSE being wildtype.
+
+The third argument, `filterCutOff` is optional. It gives a cutoff for filtering the RNA sequencing data of genes with little to no read counts.
+
+When `runDifferentialGeneExp` is called, it subsets the RNA sequencing data by `DepMap_ID` argument, and then performs a series of data transformation steps, as well as filtering out genes that do not pass the cutoff. Two plots are created: before data transformation, and after data transformation. An ideal plot after data transformation has the blue line to be horizontal. (Please let me know if it doesn't look like that!) Then, it runs a statistical test similar to the T-test over and over again across all genes comparing WT/MT cell lines using `cellLineStatus` argument, and returns a dataframe containing the top deferentially genes.
+
+ 
+```{r echo=F, message=F}
+RNA_reads <- load.from.taiga(data.name='public-21q1-4b39', data.version=28, data.file='CCLE_RNAseq_reads')
+colnames(RNA_reads) = stringr::word(colnames(RNA_reads), 1) 
+RNA_reads = t(RNA_reads)
+RNA_reads = RNA_reads[, !duplicated(colnames(RNA_reads))]
+RNA_reads = as.data.frame(RNA_reads) 
+
+
+runDifferentialGeneExp = function(DepMap_ID, cellLineStatus, filterCutOff = 1) {
+  if(class(DepMap_ID) != "character") {
+    stop("runDifferentialGeneExp: DepMap_ID must be a character vector.")
+  }
+  if(!all(startsWith(metadata$DepMap_ID, "ACH"))) {
+    stop("runDifferentialGeneExp: DepMap_ID needs to contain 'ACH' IDs to identify cell lines.")
+  }
+  if(class(cellLineStatus) != "logical") {
+    stop("runDifferentialGeneExp: cellLineStatus must be a logical vector.")
+  }
+  if(length(DepMap_ID) != length(cellLineStatus)) {
+    stop("runDifferentialGeneExp: DepMap_ID and cellLineStatus vector length must be the same.")
+  }
+  
+  #subset RNA count matrix to cell lines specified by argument
+  cellLineStatus = cellLineStatus[DepMap_ID %in% colnames(RNA_reads)]
+  RNA_reads_analysis = RNA_reads %>% select(any_of(DepMap_ID))
+
+  #create reads object from Limma
+  RNA_reads_obj = DGEList(RNA_reads_analysis)
+
+  #filter out genes in which the max read count per million across cell lines is < 1.
+  drop = which(apply(cpm(RNA_reads_obj), 1, max) < filterCutOff)
+  RNA_reads_filtered = RNA_reads_obj[-drop ,]
+
+  mm = model.matrix(~0 + cellLineStatus)
+  y = voom(RNA_reads_filtered, mm, plot = T)
+  vfit = lmFit(y, mm)
+
+  #comparison matrix
+  contr.matrix = makeContrasts(MT_WT = cellLineStatusTRUE - cellLineStatusFALSE,
+                                levels = colnames(mm))
+
+  vfit = contrasts.fit(vfit, contrasts=contr.matrix)
+  efit = eBayes(vfit)
+
+  plotSA(efit, main="Final model")
+
+  de_table = topTable(efit, coef = 'MT_WT', n=Inf)
+  return(de_table)
+}
+
+```
+
+## Problem 7
+
+Run `runDifferentialGeneExp` on lung cancer cell line samples to test differential gene expression by KRAS MT/WT. Does the blue line look horizontal after data transformation?
+
+Then, with the returned dataframe, describe a few of the top differentially expressed genes, in terms of the biology, (adjusted) p value, and log fold change:
+
+For instance, are these genes expressed higher or lower between MT/WT cell lines? Search the gene symbols, and try to understand a little bit of biology of a gene or two - do you think it makes sense?
+
+```{r echo=F, message=F}
+DE_result = runDifferentialGeneExp(LUAD_analysis$DepMap_ID, LUAD_analysis$KRAS_mutated)
+knitr::kable(head(DE_result))
+```
+
+Solution: The top differentially expressed genes are upregulated by MT KRAS, with a log fold change of 4. The genes AREG and EREG are ligands that bind to the epidermal growth factor, which activates the KRAS pathway. KRAS mutation is associated with most increased level of these ligands expression, but the mechanism of action is unclear.
+
+Then, using ggplot, make a volcano plot of the results. Transform the adjust p-value into -log10 scale using the function `-log10()`. What do you notice about the overall trend of the volcano plot?
+
+```{r echo=F, message=F}
+ggplot(DE_result) + geom_point(mapping = aes(logFC, -log10(adj.P.Val))) 
+```
+
+Solution: The significant genes are generally upregulated than downregulated.
+
+Lastly, where does KRAS expression fall in this ranked list of differentially expressed genes?
+
+
+## Problem 8
+
+To make sure that the results are correct, pick a gene of interest from the list of top differentially expressed genes. Create a boxplot of the gene' expression based on KRAS WT/MT in lung cancer cell lines. What do you notice between this analysis compared to differential gene expression analysis? 
+
+You will need to use the `expression` dataframe, and not `RNA_reads` dataframe. 
+
+```{r echo=F, message=F}
+AREG_expression = expression %>% select(DepMap_ID, AREG) %>% rename(AREG_expression = AREG)
+analysis = analysis %>% left_join(AREG_expression, by = "DepMap_ID")
+
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+cat("Sample size of MT", table(LUAD_analysis$KRAS_mutated)[2])
+cat("Sample size of WT", table(LUAD_analysis$KRAS_mutated)[1])
+ggplot(LUAD_analysis, aes(KRAS_mutated, AREG_expression)) + geom_boxplot() + ggtitle("Lung Cancer - AREG")
+t.test(AREG_expression ~ KRAS_mutated, data = LUAD_analysis)
+```
+
+Solution: The log-fold change is less in this analysis than the reported from differential gene expression. This may be due to different processing strategies.

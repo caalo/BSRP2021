@@ -1,0 +1,159 @@
+---
+title: "Pset3_Exercises"
+author: "your-name-here"
+
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+set.seed(2021)
+
+library(tidyverse)
+```
+
+## Part 0: Warmup
+
+We are interested to study the proportion of genes in the X chromosome. 
+
+Seven of the 100 human genes we sampled randomly from the human genome were found to occur on the X chromosome. The sample fraction of genes on chr. X was thus 7/100 = .07.
+
+1. For each of the statements, indicate whether True or False.
+
+.07 is the proportion of all human genes on the X chromosome. 
+
+.07 estimates p, the parameter of proportion of all human genes on the X chromosome. 
+
+The proportion of all human genes sampled that belong on the X chromosome has a sampling distribution. 
+
+Solution:
+
+False, True, True.
+
+## Part 1: Discrete probability
+
+We generate the plodiy vector from the first week again, with some modifications as shown below.
+
+```{r echo=F, message=F}
+ploidy = rep(2, 23)
+names(ploidy) = paste("chr", 1:23, sep="")
+ploidy[1] = 3
+ploidy[12] = 3
+ploidy[2:9] = 1
+```
+
+1. If I randomly sample a chromosome, what is the probability that I will get a diploid chromosome?
+  
+Solution: 13/23
+
+2. If I randomly sample a chromosome, what is the probability that I will get a non-diploid chromosome?
+
+Solution: 10/23
+
+## Part 3: Continuous probability
+
+Load in the gene length dataset.
+
+```{r echo=F, message=F}
+genes = read.csv('chap04e1HumanGeneLengths.csv')
+```
+
+
+1. Make a histogram showing the distribution of the population using ggplot. Can you change the scale of the x-axis to remove some of the outliers?
+
+```{r echo=F, message=F}
+ggplot(genes) + geom_histogram(mapping = aes(geneLength)) + scale_x_continuous(limits = c(0, 10000))
+```
+
+2. What is the probability that a gene sampled is less than 5000bp? Use R to compute it.
+
+```{r echo=F, message=F}
+shortGenes = genes$geneLength[genes$geneLength < 5000]
+p = length(shortGenes)/length(genes$geneLength)
+cat("Probability: ", p)
+```
+
+3. What is the probability that a gene sampled between 4000bp and 5000bp?
+
+```{r echo=F, message=F}
+shortGenes = genes$geneLength[genes$geneLength < 5000 & genes$geneLength > 4000]
+p = length(shortGenes)/length(genes$geneLength)
+cat("Probability: ", p)
+```
+
+
+## Part 4: Probability in sequencing.
+
+Turns out, there are multiple steps of sampling from patient to bioinformatics analysis that affects our final measurements.
+
+Suppose that you are screening for early detection of lung cancer. For the population you are screening, you know that roughly 5% of the population has lung cancer.
+
+1. You enroll 200 patients in your study via random sampling. How many patient do you expect to have lung cancer?
+
+Solution: 5/200 = 2.5%
+
+To test for lung cancer, you decided to study a specific somatic variant that occurs at 1% allelic fraction among those with lung cancer.
+
+You collect blood draw samples, and sequence them. Each patient's sample has 5,000 genomic equivalence - that is, 5000 copies of this gene, whether it is wildtype or mutant.
+
+The protocol you use to sequence the samples only picks up 50% of the 5,000 genomic equivalence. 
+
+2. Suppose a patient sample you are analyzing from the sequencer has the mutation. What is the number of mutant variants you expect to see?
+
+Solution: 5000 * .5 * .01 = 25
+
+From the 200 patients in the study, what is total number of mutant variants aggregated you expect to see?
+
+2.5 * 25 = 62.5
+
+## Part 5: One sample T-test
+
+
+1. From the gene lengths dataframe, sample 100 genes using `sample_n()` function. We are going to treat the gene lengths dataframe as the true population, and our dataframe from sampling as our sample. Make a histogram showing the distribution of the sample.
+
+```{r echo=F, message=F}
+sample_genes = sample_n(genes, 100)
+ggplot(sample_genes) + geom_histogram(mapping = aes(geneLength)) + scale_x_continuous(limits = c(0, 10000))
+
+```
+
+2. Run a t-test on the mean of gene length, testing whether the sample mean is same as 2622, the true population mean. In the `t.test()` function, use the `mu` argument to indicate the null hypothesis.What is the null hypothesis? Do you reject the null hypothesis? 
+
+```{r echo=F, message=F}
+t.test(sample_genes$geneLength, mu = 2622)
+```
+
+
+3. Repeat the entire process, now with 1000 genes. Compare the 95% confidence interval between the two tests. What do you notice? What are some factors that explain the different confidence intervals?
+
+```{r echo=F, message=F}
+sample_genes = sample_n(genes, 1000)
+ggplot(sample_genes) + geom_histogram(mapping = aes(geneLength)) + scale_x_continuous(limits = c(0, 10000))
+t.test(sample_genes$geneLength, mu = 2622)
+```
+
+## Part 6: Plotting tricks
+
+1. Load in metadata, and make a barplot of the `primary_disease` to understand the frequency of cancer types. 
+
+```{r echo=F, message=F}
+metadata = read.csv("BroadData/sample_info.csv", stringsAsFactors = F)
+ggplot(metadata) + geom_bar(mapping = aes(primary_disease)) 
+```
+
+2. Let's try to make this more readable. Add the following code to your barplot to rotate the labels: `+ theme(axis.text.x=element_text(angle = 90, hjust = 0))`
+
+```{r echo=F, message=F}
+ggplot(metadata) + geom_bar(mapping = aes(primary_disease)) + theme(axis.text.x=element_text(angle = 90, hjust = 0))
+```
+
+3. Let's reorder the x-axis by the count. To do so, add an option called `+ scale_x_discrete(limits = new_axis)`, where `new_axis` is a vector of the x-axis labels in our desired order. Let `new_axis = names(sort(table(metadata$primary_disease), decreasing = T))`. Try it out.
+
+```{r echo=F, message=F}
+new_axis = names(sort(table(metadata$primary_disease), decreasing = T))
+ggplot(metadata, aes(primary_disease)) + geom_bar() + scale_x_discrete(limits = new_axis) + theme(axis.text.x=element_text(angle = 90, hjust = 0))
+```
+

@@ -1,0 +1,230 @@
+---
+title: "Pset1 Exercises"
+author: "Your-name-here"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+```
+
+## Part 1: Vectors and functions
+
+Let chrNum be a vector that contains numeric information about the ploidy of
+each humnan chromosome. Given a normal, diploid genome, we get a vector of 
+length 23, with each element a value of 2. Variable `chrNum` is created with the
+code below.
+
+
+```{r echo=F, message=F}
+chrNum = rep(2, 23)
+names(chrNum) = paste("chr", 1:23, sep="")
+```
+
+1. What data type is `chrNum`? Use the `class()` function on `chrNum`. What is the input argument and output of this function? When you write your answer in words, you can write it outside of the code section.
+
+```{r echo=F, message=F}
+class(chrNum)
+```
+2. What are the 2nd and 4th elements of `chrNum`? (We are thinking about it as the ploidy of chr 2 and chr 4.)
+
+```{r echo=F, message=F}
+chrNum[2]
+chrNum[4]
+```
+
+*Aneuploidy* is one of the most common genetic alterations in cancer, in which
+entire chromosomes' ploidy change, especially during meiosis.
+Let us encode this change by changing the the values in `chrNum`.
+
+2. Modify `chrNum` to the following: chr 1 and 12 have three copies, and
+chr 2 and 9 has one copy. At the end of each problem for this homework, use the `cat`()` function 
+to print out the results on text (ie. `cat(chrNum)`)
+
+```{r echo=F, message=F}
+chrNum[1] = 3
+chrNum[12] = 3
+chrNum[2] = 1
+chrNum[9] = 1
+cat(chrNum)
+```
+
+3. Then, chr 14 doubles. and chr 18 triples. 
+Also, chr 21 is the sum of chr 2, 3, and 4. 
+Tip: Is there a more algebraic way of writing it instead of `chrNum[14] = 4`? Consider `x = x * 2`.
+
+```{r echo=F, message=F}
+chrNum[14] = chrNum[14] * 2
+chrNum[18] = chrNum[18] * 3
+chrNum[21] = chrNum[2] + chrNum[3] + chrNum[4]
+cat(chrNum)
+```
+
+4. What are the mean and median of `chrNum`? Use the functions `mean()` and `median()`.
+What are the input arguments and return values of these functions? To learn about what a function does, in your R Console, use type `?functionName` to look it up. For instance, `?mean`.
+You can use strings in `cat()` to add text to your printouts: 
+ie. `cat("My answer is: ", mean(x))`.
+
+```{r echo=F, message=F}
+cat("The mean is: ", mean(chrNum))
+cat("The median is: ", median(chrNum))
+```
+
+5. Subset `chrNum` to elements that are diploid (have a value of 2) and store it in a vector called `diploids`. 
+Hint: Use comparison operators to create logical indexing vector.
+
+```{r echo=F, message=F}
+diploids = chrNum[chrNum == 2]
+cat(diploids)
+```
+
+7. What is the length of `diploids`?
+
+```{r echo=F, message=F}
+cat("Length: ", length(diploids))
+```
+
+8. Subset `chrNum` to elements that are non-diploid (have a value that is not 2) and store it in a vector called `nonDiploids`. What is its length?
+
+
+```{r echo=F, message=F}
+nonDiploids = chrNum[chrNum != 2]
+cat(nonDiploids)
+length(nonDiploids)
+```
+
+9. Now, suppose you change `chrNum`. Does that affect `nonDiploids`?
+
+
+10. Modify `chrNum` so that all non-diploid chromosomes double in copy number. Tip: Use ideas from question 3.
+
+Compare this to `nonDiploids`. How are these two vectors similar and different?
+
+```{r echo=F, message=F}
+chrNum[chrNum != 2] = chrNum[chrNum != 2] * 2
+cat("chrNum:", chrNum)
+cat("nonDiploids:", nonDiploids)
+```
+
+11. A property of Vectors that remains unexplored is the Names property. 
+Use the `names()` function on chrNum to look at the names of the vector. 
+Bonus: Rename the name of chr 23 to "chr X/Y", and give it one copy. 
+
+```{r echo=F, message=F}
+names(chrNum)[names(chrNum) == "chr23"] = "chrX/Y"
+chrNum[23] = 1
+cat(names(chrNum))
+cat(chrNum)
+```
+
+# Part 2: Dataframes
+
+Take a look at the `iris` dataframe. It is a default variable loaded into the 
+environment. 
+
+Use `head()` and `tail()` functions to look at the first few and last few rows of the dataframe.
+
+Use `nrow()`, `ncol()`, `dim()`, `colnames()` functions to access properties of the dataframe.
+
+Use `View()` function to examine the dataframe as a spreadsheet in a new tab.
+
+1. What is the number of columns and rows for `iris`? 
+What do you think each row corresponds to?
+
+```{r echo=F, message=F}
+cat("Rows:", nrow(iris))
+cat("Columns:", ncol(iris))
+```
+
+2. What are the means of the `Sepal.Length` and `Sepal.Width`?
+
+```{r echo=F, message=F}
+cat("Mean Sepal Length: ", mean(iris$Sepal.Length))
+cat("Mean Sepal Width: ", mean(iris$Sepal.Width))
+```
+
+3. The function `table()` prints out a frequency table from a string vector as the input argument. 
+What is the frequency table for the `Species` column?
+
+```{r echo=F, message=F}
+cat("Species Count: ", table(iris$Species))
+```
+
+4. What are the 2nd and 4th elements of the `Sepal.Length` column?
+
+```{r echo=F, message=F}
+iris$Sepal.Length[2]
+iris$Sepal.Length[4]
+```
+
+5. Examine the mean `Sepal.Length` between the three `Species`: which Species 
+have the highest mean? Hint: Use a comparison operator on the `Species` column to create a logical indexing vector. This logical indexing vector is used to subset on `Sepal.Length` column.
+
+```{r echo=F, message=F}
+cat("Setosa: ", mean(iris$Sepal.Length[iris$Species == "setosa"])) #or, iris[iris$Species == "setosa", "Sepal.Length"]
+cat("Versicolor: ", mean(iris$Sepal.Length[iris$Species == "versicolor"]))
+cat("Virginica: ", mean(iris$Sepal.Length[iris$Species == "virginica"]))
+```
+6. Create a new dataframe consisting of only "setosa" rows and only consists of 
+`Sepal.Length`, `Sepal.Width`, and `Species` columns. 
+Compute the mean of Sepal.Length. 
+Does it match with your previous answer?
+
+```{r echo=F, message=F}
+iris_subset = iris[iris$Species == "setosa", c("Sepal.Length", "Sepal.Width", "Species")]
+cat("Sepal length for setosa: ", mean(iris_subset$Sepal.Length))
+```
+
+
+7. Create a new dataframe consisting of only Septal.Length > 5.0. 
+What is its Sepal.Length mean?
+
+```{r echo=F, message=F}
+iris_subset2 = iris[iris$Sepal.Length > 5.0, ]
+cat(mean(iris_subset2$Sepal.Length))
+```
+
+8. Take the dataframe from problem 7 and subset it further to "setosa" species. What is its Sepal.Length mean?
+
+```{r echo=F, message=F}
+iris_subset3 = iris_subset2[iris_subset2$Species == "setosa", ]
+cat(mean(iris_subset3$Sepal.Length))
+```
+
+9. Bonus: The two subsetting steps from Problems 7 and 8 can be combined into a single step. Create a logical indexing vector that is TRUE if Sepal.Length > 5.0 AND the Speciies is "setosa". Then use it to subset on the original `iris` dataframe. Does the Sepal.Length matches the answer from Problem 8?
+```{r echo=F, message=F}
+iris_subset4 = iris[iris$Sepal.Length > 5.0 & iris$Species == "setosa", ]
+mean(iris_subset4$Petal.Width)
+```
+
+
+
+9. Consider the following dataframe:
+
+```{r echo=F, message=F}
+celllines  = data.frame(cellline = c("Cellline A", "Cellline B", "Cellline C", "Cellline D", "Cellline E", "Cellline F"),
+                        YFG_mutated = c(TRUE, TRUE, FALSE, FALSE, FALSE, TRUE),
+                        YFG_expression = c(0.5, 1, 4, 3.2, 6, .7))
+```
+
+Print the frequency table of whether Your Favorite Gene (YFG) is mutated or not.
+
+What is the mean gene expression of all cell lines?
+
+what is the mean gene expression of mutated cell lines? 
+
+What is the mean gene expression of non-mutated cell lines?
+
+```{r echo=F, message=F}
+table(celllines$YFG_mutated)
+mean(celllines$YFG_expression)
+mean(celllines$YFG_expression[celllines$YFG_mutated == TRUE])
+mean(celllines$YFG_expression[celllines$YFG_mutated == FALSE])
+
+
+```
+
+
+
+

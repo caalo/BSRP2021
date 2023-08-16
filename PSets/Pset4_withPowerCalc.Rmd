@@ -1,0 +1,259 @@
+---
+title: "BSRP Problem Set 4"
+author: "your-name-here"
+date: ""
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+# Introduction
+
+The goal of this problem set is to revisit the T-tests you did from Pset3 and consider sample size and power calculations. Then, you will expand the analysis to test for many genes using differential gene expression. 
+
+Before you try knitting this document, please install the following packages via your R console (the code is commented out). You only need to do this once.
+
+```{r echo=F, message=F}
+# install.packages("BiocManager")
+# BiocManager::install(version = "3.12")
+# BiocManager::install("limma")
+# BiocManager::install("edgeR")
+```
+
+
+Here is our original question. 
+
+## Biological Problem <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| Is KRAS mutation associated to increased KRAS expression compared to wildtype KRAS in lung, pancreas, and colon cancer cell lines? | T-test to compare means of two groups, visualized with box plots. |
+
+
+## Assignment Formatting
+
+Write your code in the designated code chunks provided, and write your written answers in the text region of the document. If you want to incorporate both text and code output, the function `cat()` will do the trick in code chunks. For example, `cat("The number of rows in the iris dataframe is", nrow(iris))`.
+
+
+```{r, echo=F, message=F}
+#Load libraries
+library(tidyverse)
+library(taigr)
+library(edgeR)
+```
+
+```{r, echo=F, message=F}
+#Load in datasets
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+dependency <- load.from.taiga(data.name='public-21q1-4b39',
+                              data.version=33,
+                              data.file='CRISPR_gene_effect',
+                              quiet = T)
+colnames(dependency) = stringr::word(colnames(dependency), 1) 
+dependency = as.data.frame(dependency)
+dependency$DepMap_ID = rownames(dependency)
+```
+
+
+
+# Back to Figure 1, one last time
+
+## Probelm 1
+
+Wrangle your dataframe to run the T-tests you did in last week. You should have a dataframe size of 1804 rows, 27 columns. 
+Perform power calculations for all three cancer subtypes (lung, panceras, colon), and then rerun the T-test to reanalyze your results. Make sure you report the sample size of each group. If we set .5 log2 fold change as biological significance, do we have enough power to detect a difference? Use the T-test power calculator found here: https://www.statskingdom.com/32test_power_t_z.html. Make sure you set Sample to "Two Samples". 
+
+*Note: When running the T-test, it has the signs flipped - a negative effect size indicates higher expression in the mutant group.*
+
+
+```{r, echo=F, message=F}
+#your code here
+KRAS_mutations = mutation %>% filter(Hugo_Symbol == "KRAS" & Variant_Classification == "Missense_Mutation")
+KRAS_mutations_CL = KRAS_mutations %>% group_by(DepMap_ID) %>% summarize(N_KRAS_mutations = n())
+KRAS_expression = expression %>% select(DepMap_ID, KRAS) %>% rename(KRAS_expression = KRAS)
+analysis = metadata %>% left_join(KRAS_mutations_CL, by = "DepMap_ID") %>% 
+  left_join(KRAS_expression, by = "DepMap_ID")
+analysis = analysis %>% mutate(KRAS_mutated = !is.na(N_KRAS_mutations))
+
+```
+
+```{r echo = F, message = F}
+#your code here
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+cat("Sample size of MT", table(LUAD_analysis$KRAS_mutated)[2])
+cat("Sample size of WT", table(LUAD_analysis$KRAS_mutated)[1])
+ggplot(LUAD_analysis, aes(KRAS_mutated, KRAS_expression)) + geom_boxplot() + ggtitle("Lung Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = LUAD_analysis)
+```
+Solution for lung cancer: The sample size is large enough for both groups to perform the test to detect an effect size of .5 with a good amount of power. The p-value is < .05, so we reject the null hypothesis, favoring that there is a difference in mean gene expression. 
+
+```{r echo = F, message = F}
+PANC_analysis = analysis %>% filter(primary_disease == "Pancreatic Cancer")
+cat("Pancreatic cell lines: Sample size of MT", table(PANC_analysis$KRAS_mutated)[2])
+cat("Pancreatic cell lines: Sample size of WT", table(PANC_analysis$KRAS_mutated)[1])
+ggplot(PANC_analysis, aes(KRAS_mutated, KRAS_expression)) + geom_boxplot() + ggtitle("Pancreatic Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = PANC_analysis)
+
+```
+Solution for pancreatic cancer: The sample size in the MT group is small - size of 8, so the false negative rate is high/power is low if we want to detect a considerable difference of half fold change in expression (difference of .5 in log2 space). Having more samples would reduce the false negative rate and potentially detect a difference if it exists. The p-value is < .05, so cannot reject the null hypothesis, suggesting that the difference in gene expression is minimal to none. 
+
+```{r echo = F, message = F}
+COL_analysis = analysis %>% filter(primary_disease == "Colon/Colorectal Cancer")
+cat("Colon cell lines: Sample size of MT", table(COL_analysis$KRAS_mutated)[2])
+cat("Colon cell lines: Sample size of WT", table(COL_analysis$KRAS_mutated)[1])
+ggplot(COL_analysis, aes(KRAS_mutated, KRAS_expression)) + geom_boxplot() + ggtitle("Colon/Colorectal Cancer")
+t.test(KRAS_expression ~ KRAS_mutated, data = COL_analysis)
+```
+
+Solution for colon cancer: The sample size in both groups are fairly reasonable - size of 43 and 40, so the false negative rate is not that high if we want to detect a considerable difference of half fold change in expression (difference of 1 in log2 space). It would be helpful to have more samples, but it is very possible that there does not exist an effect size of .5. The p-value is < .05, so cannot reject the null hypothesis, suggesting that the difference in gene expression is minimal to none. 
+
+
+## Problem 2
+
+Now look back at Stephens et al. paper. What is their reported sample size and p-value for Figure 1A? Do you trust their claims of their biological significance and statistical significance?
+
+Solution: Their sample size are all fairly big, almost > 50 in all scenarios. The effect size seem to be roughly between .25 to .50. With enough sample size and low p-value, the analysis looks reasonable. 
+
+
+# Differential Gene Expression
+
+Now, we are going to compare KRAS WT/MT cell lines against gene expression of all genes profiled from RNA sequencing via differential gene expression. 
+
+## Biological Problem <-> Computational Analysis
+
+| Biological Question                                                                                                                | Computational analysis                                            |
+|------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| Which genes are the most upregulated or downregulated from KRAS mutation compared to WT in lung cancer cell lines? | Differential gene expression analysis, visualized with volcano plots. |
+
+# Setup code
+
+The following code first loads in the raw RNA sequencing data, which is the raw data that is used to generate the gene expression data. Differential gene expression analysis takes this raw RNA sequencing data, processes it differently, and runs the desires analysis across all genes.
+
+The code then defines a function to perform differential gene expression analysis in a function, `runDifferentialGeneExp`.
+
+The first argument, `DepMap_ID`, is a String vector of the cell line names to perform differential gene expression. 
+
+The second argument, `cellLineStatus`, is a Logical vector indicating whether the corresponding cell lines in DepMap_ID is in the mutated group, with TRUE being mutated, and FALSE being wildtype.
+
+The third argument, `filterCutOff` is optional. It gives a cutoff for filtering the RNA sequencing data of genes with little to no read counts.
+
+When `runDifferentialGeneExp` is called, it subsets the RNA sequencing data by `DepMap_ID` argument, and then performs a series of data transformation steps, as well as filtering out genes that do not pass the cutoff. Two plots are created: before data transformation, and after data transformation. An ideal plot after data transformation has the blue line to be horizontal. (Please let me know if it doesn't look like that!) Then, it runs a statistical test similar to the T-test over and over again across all genes comparing WT/MT cell lines using `cellLineStatus` argument, and returns a dataframe containing the top deferentially genes.
+
+ 
+```{r echo=F, message=F}
+RNA_reads <- load.from.taiga(data.name='public-21q1-4b39', data.version=28, data.file='CCLE_RNAseq_reads')
+colnames(RNA_reads) = stringr::word(colnames(RNA_reads), 1) 
+RNA_reads = t(RNA_reads)
+RNA_reads = RNA_reads[, !duplicated(colnames(RNA_reads))]
+RNA_reads = as.data.frame(RNA_reads) 
+
+
+runDifferentialGeneExp = function(DepMap_ID, cellLineStatus, filterCutOff = 1) {
+  if(class(DepMap_ID) != "character") {
+    stop("runDifferentialGeneExp: DepMap_ID must be a character vector.")
+  }
+  if(!all(startsWith(metadata$DepMap_ID, "ACH"))) {
+    stop("runDifferentialGeneExp: DepMap_ID needs to contain 'ACH' IDs to identify cell lines.")
+  }
+  if(class(cellLineStatus) != "logical") {
+    stop("runDifferentialGeneExp: cellLineStatus must be a logical vector.")
+  }
+  if(length(DepMap_ID) != length(cellLineStatus)) {
+    stop("runDifferentialGeneExp: DepMap_ID and cellLineStatus vector length must be the same.")
+  }
+  
+  #subset RNA count matrix to cell lines specified by argument
+  cellLineStatus = cellLineStatus[DepMap_ID %in% colnames(RNA_reads)]
+  RNA_reads_analysis = RNA_reads %>% select(any_of(DepMap_ID))
+
+  #create reads object from Limma
+  RNA_reads_obj = DGEList(RNA_reads_analysis)
+
+  #filter out genes in which the max read count per million across cell lines is < 1.
+  drop = which(apply(cpm(RNA_reads_obj), 1, max) < filterCutOff)
+  RNA_reads_filtered = RNA_reads_obj[-drop ,]
+
+  mm = model.matrix(~0 + cellLineStatus)
+  y = voom(RNA_reads_filtered, mm, plot = T)
+  vfit = lmFit(y, mm)
+
+  #comparison matrix
+  contr.matrix = makeContrasts(MT_WT = cellLineStatusTRUE - cellLineStatusFALSE,
+                                levels = colnames(mm))
+
+  vfit = contrasts.fit(vfit, contrasts=contr.matrix)
+  efit = eBayes(vfit)
+
+  plotSA(efit, main="Final model")
+
+  de_table = topTable(efit, coef = 'MT_WT', n=Inf)
+  return(de_table)
+}
+
+```
+
+## Problem 3
+
+Run `runDifferentialGeneExp` on lung cancer cell line samples to test differential gene expression by KRAS MT/WT. Does the blue line look horizontal after data transformation?
+
+Then, with the returned dataframe, describe a few of the top differentially expressed genes, in terms of the biology, (adjusted) p value, and log fold change:
+
+For instance, are these genes expressed higher or lower between MT/WT cell lines? Search the gene symbols, and try to understand a little bit of biology of a gene or two - do you think it makes sense?
+
+```{r echo=F, message=F}
+DE_result = runDifferentialGeneExp(LUAD_analysis$DepMap_ID, LUAD_analysis$KRAS_mutated)
+knitr::kable(head(DE_result))
+```
+
+Solution: The top differentially expressed genes are upregulated by MT KRAS, with a log fold change of 4. The genes AREG and EREG are ligands that bind to the epidermal growth factor, which activates the KRAS pathway. KRAS mutation is associated with most increased level of these ligands expression, but the mechanism of action is unclear.
+
+Then, using ggplot, make a volcano plot of the results. Transform the adjust p-value into -log10 scale using the function `-log10()`. What do you notice about the overall trend of the volcano plot?
+
+```{r echo=F, message=F}
+ggplot(DE_result) + geom_point(mapping = aes(logFC, -log10(adj.P.Val))) 
+```
+
+Solution: The significant genes are generally upregulated than downregulated.
+
+Lastly, where does KRAS expression fall in this ranked list of differentially expressed genes?
+
+
+## Problem 4
+
+To make sure that the results are correct, pick a gene of interest from the list of top differentially expressed genes. Create a boxplot of the gene' expression based on KRAS WT/MT in lung cancer cell lines. What do you notice between this analysis compared to differential gene expression analysis? 
+
+You will need to use the `expression` dataframe, and not `RNA_reads` dataframe. 
+
+```{r echo=F, message=F}
+AREG_expression = expression %>% select(DepMap_ID, AREG) %>% rename(AREG_expression = AREG)
+analysis = analysis %>% left_join(AREG_expression, by = "DepMap_ID")
+
+LUAD_analysis = analysis %>% filter(primary_disease == "Lung Cancer")
+cat("Sample size of MT", table(LUAD_analysis$KRAS_mutated)[2])
+cat("Sample size of WT", table(LUAD_analysis$KRAS_mutated)[1])
+ggplot(LUAD_analysis, aes(KRAS_mutated, AREG_expression)) + geom_boxplot() + ggtitle("Lung Cancer - AREG")
+t.test(AREG_expression ~ KRAS_mutated, data = LUAD_analysis)
+```
+
+Solution: The log-fold change is less in this analysis than the reported from differential gene expression. This may be due to different processing strategies.
