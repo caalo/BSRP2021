@@ -1,0 +1,176 @@
+---
+title: "Week 2 - Introduction to loops, conditionals, and funcitons with metadata"
+author: "Sindimwo Thierry"
+date: "6/7/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Just loading in the needed libraries and datasets here. Nothing to modify in these next two code chunks.
+
+```{r, echo=T, message=F}
+#Don't modify this chunk of code!
+library(tidyverse)
+library(taigr)
+```
+
+```{r, echo=F, message=F}
+#Don't modify this chunk of code unless things are crashing! (see below)
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+#IF THIS SECTION OF THE CODE IS CRASHING FOR YOU, try loading in the CCLE_data.Data you downloaded on Monday.
+#comment out lines 72 to 88, and uncomment the line below. My guess is that it is in your Downloads folder, but
+#change it if it's in a different location.
+#load("~/Downloads/CCLE_data.Rdata")
+```
+
+Warm-up! We want to make sure you can subset dataframes in your sleep this summer...
+
+Q0.
+
+Subset iris by rows so that the Sepal.Length <= 2.
+
+```{r, echo=T, message=F}
+iris_rows = iris[iris$Sepal.Length <= 2, ]
+```
+
+Subset iris by columns to only have “Sepal.Length” and Sepal.Width” columns.
+
+```{r, echo=T, message=F}
+iris_cols = iris[ , c("Sepal.Length", "Sepal.Width")]
+```
+
+Now on to this week's lesson.
+
+You are hiking in Fukushima, Japan looking for irises for your flower collection, when you meet an old man. He tell you that he knows a great secret that will change biomedicine. He claims that we get cancers all the time as adults, but as we age, our immune systems get weaker and the risk of metastasis goes up. That's why elderly die of cancer. Naturally you don't believe this old man talking to you in rural Japan, but now you are curious!
+Have you ever wondered if cancer is more deadly when we get older MAYBE because of metastasis? Turns out that's something we can look at just from the "metadata" of the cancer cell line encyclopedia (CCLE). In this problem set you will test the old man's hypothesis. 
+
+Now let's play with the metadata! Metadata contains the data on every cell patient sample in the CCLE database. You can check out the first row just to see for yourself. This is like what we did before with the iris data, but just wayyy bigger of a dataframe. We will use this as way to practice functions, loops, and conditionals as well!
+
+
+Q1. What is the average (mean) age of our cancer cell donors? What is the median age?
+Tip: You can use summary(x) to get the a bunch of summary statistics of all the columns of dataframe x. 
+
+```{r, echo=T, message=F}
+mean(metadata$age, na.rm=TRUE)
+median(metadata$age, na.rm=TRUE)
+
+```
+Solution: 
+
+Q2. Let's write a function that determines if the patient is old or not based on an age cutoff. Fill in the missing parts of the code below (where there is an XXXXXX). The input argument metadf will expect the metadata dataframe, row will expect a numeric, and cutoff will expect another numeric.
+
+```{r, echo=T, message=F}
+#Fill in the missing parts of the code below (where there is an XXXXXX)
+agechecker = function(metadf, row, cutoff){
+  if(metadf$age[row] > cutoff){
+    return(TRUE)
+  }
+  else{
+    return(FALSE)
+  }
+}
+#
+```
+
+Test to make sure your function is working!
+
+```{r, echo=T, message=F}
+
+a = agechecker(metadata, 1, 5) 
+b = agechecker(metadata, 2, 83)
+```
+a should be TRUE. b should be FALSE. 
+
+
+
+Q3. Let's write a function that determines if the patient's tumor is metastatic or not. Fill in the missing parts of the code below (where there is an XXXXXX). The function takes in metadf dataframe and a row number and returns TRUE if column primary_or_metastasis is Metastasis.
+
+Tip: Try running the table() on the primary_or_metastasis column to get a sense of the data!
+
+```{r, echo=T, message=F}
+#Type your code below
+metastaticchecker = function(metadf, row){
+  #function takes in metadf and a row number and returns TRUE if column primary_or_metastasis is Metastasis
+  if(metadf$primary_or_metastasis[row] == "Metastasis") {
+    return(TRUE)
+  }
+  else{
+    return(FALSE)
+  }
+}
+
+```
+
+Test to make sure your function is working!
+
+```{r, echo=T, message=F}
+#Type your code below check if the
+a = metastaticchecker(metadata, 1) 
+b = metastaticchecker(metadata, 2) 
+```
+a should be TRUE. b should be FALSE. 
+
+
+Q4: Tying it all together: Now let's run a loop that will run through all the patients in the dataframe and if they are over the age cutoff, add their totals to the metastatic or not of their age group.
+
+```{r, echo=T, message=F}
+elderly_metastatic = 0
+young_metastatic = 0
+elderly_nonmetastatic = 0
+young_nonmetastatic = 0
+
+cutoff = 59
+
+for (p in 1:nrow(metadata)){ 
+  #p for patient, rather than i... ;-) 
+
+  if (is.na(metadata[p,"age"])){
+    #skip if their age is not recorded
+    next
+  }
+  if(is.na(metadata[p,"primary_or_metastasis"])){
+    #skip if no record of metastasis or primary
+    next
+  }
+  
+  if(agechecker(metadata, p, cutoff) == T && metastaticchecker(metadata, p) == T) {
+    elderly_metastatic = elderly_metastatic + 1
+  }
+  #Add 3 more conditional statements to fill in the other 4 variables
+    if(agechecker(metadata, p, cutoff) == F && metastaticchecker(metadata, p) == T) {
+      young_metastatic = young_metastatic + 1
+    #young patient, metastistic cancer
+  }
+  if(agechecker(metadata, p, cutoff)== T && metastaticchecker(metadata, p)== F) {
+    elderly_nonmetastatic = elderly_nonmetastatic + 1
+    #elderly patient, nonmetastatic cancer
+  }
+  if(agechecker(metadata, p, cutoff) == F && metastaticchecker(metadata, p) == F) {
+    young_nonmetastatic = young_nonmetastatic + 1
+    #young patient, nonmetastic cancer
+  }
+
+  
+}
+
+
+#now we can compare the ratios! Is it true that elderly have a higher proportion of metastatic cancers?
+elderly_metastatic_ratio = elderly_metastatic/(elderly_metastatic + elderly_nonmetastatic)
+
+young_metastatic_ratio = young_metastatic/(young_metastatic + young_nonmetastatic)
+
+```
+So.... is it true that elderly have a higher proportion of metastatic cancers?
+
+No it is not true. Younger people (33.68%) have a higher proportion of metastatic cancer than older people (29.81%)..
+
