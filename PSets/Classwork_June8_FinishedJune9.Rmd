@@ -1,0 +1,121 @@
+---
+title: "Classwork_June8"
+author: "your-name-here"
+date: "6/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+```
+
+```{r, echo=F, message=F}
+#Don't modify this chunk of code!
+library(tidyverse)
+library(taigr)
+```
+
+Load in data from Taiga. 
+
+```{r, echo=F, message=F}
+#Don't modify this chunk of code!
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+```
+
+Alternatively, load in data from downloaded file.
+
+```{r, echo=F, message=F}
+#load("CCLE_data.Rdata")
+```
+
+Practice data wrangling on smaller subset of the three dataframes.
+
+```{r, echo=F, message=F}
+cellLines = metadata$DepMap_ID[1:5] #work with 5 celllines.
+
+metadata_sm = metadata[metadata$DepMap_ID %in% cellLines ,] 
+mutation_sm = mutation[mutation$DepMap_ID %in% cellLines ,]
+expression_sm = expression[expression$DepMap_ID %in% cellLines , c(which(colnames(expression) == "DepMap_ID"), 1:100)]
+
+```
+
+```{r}
+
+#at co-working hours on June 9, we practiced data wrangling together.
+
+#joining metadata and expression - each rows for both datasets represent cell lines
+joined_df = inner_join(metadata_sm, expression_sm, "DepMap_ID")
+
+#what if we joined metadata and mutation?
+metadata_mutation = inner_join(metadata_sm, mutation_sm, "DepMap_ID") #kanika: many rows corresponding to the same cell line??
+
+#each row still represents a variant, we just have additional information coming from the metadata - age, for example. 
+#for all variants that belong to a cell line, the cell line's metadata is repeated many times.
+#this dataframe can answer: for a particular variant, what is the patient's age?
+
+#but for question about the cell line itself, we can't answer the following: what is the number of mutations for this cell line?
+
+#we can if we first transform using the summarize function.
+#taking mutation_sm, and then transforming it so that each row now represents a cell line (DepMap_ID).
+#create a column (n_mutations) that counts the number of mutations.
+#This can answer: the number of mutations per cell line!
+mutationByCellLines = summarize(group_by(mutation_sm, DepMap_ID), n_mutated = n())
+
+#How about: the number of mutations per strand??
+mutationByStrand = summarize(group_by(mutation_sm, Strand), n_mutated_strand = n())
+#we only have the + strand in mutation, so one row.
+```
+
+
+```{r}
+#Mixed practice
+
+#What is the number of TP53 mutations for each cancer type?
+
+
+#Which of the three datasets do we need?
+#mutations, metadata
+
+#What are the observation and columns we have to work with?
+#metadata: lineage_subtype column
+#mutation: mutation information
+
+#What is the final dataframe rows and columns we need?
+#rows represents cancer types
+#number of mutations, cancer type
+
+
+#How can the data wrangling steps be broken down into the 4 types of questions we have?
+mutation_TP53 = mutation_sm[mutation_sm$Hugo_Symbol == "TP53" ,] #kanika
+
+#patrick: can we inner join with metadata here? - yes, but might get a little bit messy - try it for yourself later.
+#chris: first summarize mutation so that each row is a cell line.
+mutation_TP53_cellLines = summarize(group_by(mutation_TP53, DepMap_ID), n_mutated = n())
+#then follow through patrick's idea.
+metadata_w_TP53 = inner_join(metadata, mutation_TP53_cellLines, "DepMap_ID")
+#summarize it one more time so that the rows are now lineage_subtype
+metadata_w_TP53_atCancerTypes = summarize(group_by(metadata_w_TP53, lineage_subtype), n_mutated = n())
+
+#are we done? does this answer the question?
+```
+```
+
+

@@ -1,0 +1,58 @@
+---
+title: "Classwork_June8"
+author: "your-name-here"
+date: "6/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+```
+
+```{r, echo=F, message=F}
+#Don't modify this chunk of code!
+library(tidyverse)
+library(taigr)
+```
+
+Load in data from Taiga. 
+
+```{r, echo=F, message=F}
+#Don't modify this chunk of code!
+metadata = load.from.taiga(data.name='public-21q1-4b39', 
+                           data.version=33, 
+                           data.file='sample_info', 
+                           quiet = T)
+
+mutation = load.from.taiga(data.name = 'public-21q1-4b39',
+                            data.version = 33,
+                            data.file = 'CCLE_mutations',
+                            quiet = T)
+
+expression =  load.from.taiga(data.name='public-21q1-4b39',
+                             data.version=33,
+                             data.file='CCLE_expression',
+                             quiet = T)
+colnames(expression) = stringr::word(colnames(expression), 1) 
+expression = as.data.frame(expression)
+expression$DepMap_ID = rownames(expression)
+
+```
+
+Alternatively, load in data from downloaded file.
+
+```{r, echo=F, message=F}
+#load("CCLE_data.Rdata")
+```
+
+Practice data wrangling on smaller subset of the three dataframes.
+
+```{r, echo=F, message=F}
+cellLines = metadata$DepMap_ID[1:5] #work with 5 celllines.
+
+metadata_sm = metadata[metadata$DepMap_ID %in% cellLines ,] 
+mutation_sm = mutation[mutation$DepMap_ID %in% cellLines ,]
+expression_sm = expression[expression$DepMap_ID %in% cellLines , c(which(colnames(expression) == "DepMap_ID"), 1:100)]
+```
+

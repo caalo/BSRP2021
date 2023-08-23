@@ -1,0 +1,38 @@
+---
+title: "Classwork June 21"
+author: "your-name-here"
+date: "6/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #clear everything
+
+```
+
+```{r}
+genes = read.csv('~/Downloads/chap04e1HumanGeneLengths.csv')
+population_param = mean(genes$geneLength)
+genes_sample1 = sample_n(genes, 1000)
+sample_statistic1 = mean(genes_sample1$geneLength)
+
+```
+
+
+
+```{r}
+total_trials = 500
+sample_size = 2000
+all_statistics = c()
+parameter = mean(genes$geneLength)
+for(trial in 1:total_trials) {
+  genes_sample = sample_n(genes, sample_size)
+  statistic = mean(genes_sample$geneLength)
+  all_statistics = c(all_statistics, statistic) 
+}
+all_statistics_df = data.frame(all_statistics)
+ggplot(all_statistics_df) + geom_histogram(aes(x = all_statistics), bins = 100) + geom_vline(xintercept = parameter, col = "red") + labs(x = "Mean Gene Length") + scale_x_continuous(limits = c(2400, 2800))
+
+
+```
